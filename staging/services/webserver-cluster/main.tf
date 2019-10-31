@@ -22,7 +22,9 @@ resource "aws_launch_configuration" "example"{
 
     user_data = <<-EOF
                 #!/bin/bash
-                echo "Hello, World" > index.html
+                echo "Hello, World" >> index.html
+                echo "${data.terraform_remote_state.db.outputs.address}" >> index.html
+                echo "${data.terraform_remote_state.db.outputs.port}" >> index.html
                 nohup busybox httpd -f -p ${var.server_port} &
                 EOF
 
@@ -146,12 +148,6 @@ resource "aws_lb_listener_rule" "asg" {
         target_group_arn = aws_lb_target_group.asg.arn
     }
 }
-
-#Defining an output variable
-output "alb_dns_name"{
-    value = aws_lb.example.dns_name
-    description = "DNS name of application load balancer"
-}
 #Changing the backend to a s3 bucket 
 terraform {
     backend "s3" {
@@ -160,5 +156,16 @@ terraform {
         dynamodb_table = "terraform-up-and-running-locks"
         encrypt = true
         key = "staging/services/webserver-cluster/terraform.tfstate"
+    }
+}
+#configuring web server cluster code to read the state file from the same s3 bucket
+#and folder where the database stores its state files.
+data "terraform_remote_state" "db" {
+    backend = "s3"
+
+    config = {
+        bucket = "my-terraform-infrastructure-state"
+        key = "staging/data-store/mysql/terraform.tfstate"
+        region = "us-east-2"
     }
 }
